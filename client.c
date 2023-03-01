@@ -185,7 +185,9 @@ int main (int argc, char *argv[])
 
     struct packet ackpkt;
     struct packet pkts[WND_SIZE];
+    // index of oldest unacked
     int s = 0;
+    // index of the next packet to be sent
     int e = 0;
     int full = 0;
 
@@ -193,15 +195,16 @@ int main (int argc, char *argv[])
     // Send First Packet (ACK containing payload)
 
     m = fread(buf, 1, PAYLOAD_SIZE, fp);
-
+    //printf("%s\n", buf);
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
     printSend(&pkts[0], 0);
     sendto(sockfd, &pkts[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
     timer = setTimer();
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
+    e += 1%9;
 
-    e = 1;
-
+    int bytesent = m;
+    //printf("%d\n",bytesent);
     // =====================================
     // *** TODO: Implement the rest of reliable transfer in the client ***
     // Implement GBN for basic requirement or Selective Repeat to receive bonus
@@ -210,11 +213,56 @@ int main (int argc, char *argv[])
     //       single data packet, and then tears down the connection without
     //       handling data loss.
     //       Only for demo purpose. DO NOT USE IT in your final submission
-    while (1) {
+
+    long f_size;
+    fseek(fp, 0, SEEK_END);
+    f_size = ftell(fp);
+    rewind(fp);
+    char f_len[sizeof(long)*8+1];
+    sprintf(f_len, "%ld", f_size);
+    //printf("%lu\n",f_size);
+
+    while (abs(e-s) != 0) {
+        // =====================================
+        // Send Subsequent Packets while WND is not full
+        if (full != 1 && bytesent < f_size) {
+            int next_seqNum = seqNum+bytesent;
+            fseek(fp, bytesent, SEEK_SET);
+            m = fread(buf, 1, ((f_size-bytesent) <= PAYLOAD_SIZE ? (f_size-bytesent) : PAYLOAD_SIZE), fp);
+            //printf("%s\n", buf);
+            bytesent += m;
+            //printf("here %ld\n",f_size-bytesent);
+            //printf("%zu\n", m);
+            buildPkt(&pkts[e], next_seqNum, 0, 0, 0, 0, 0, m, buf);
+            //printf("%s",pkts[e].payload);
+            printSend(&pkts[e], 0);
+            sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+            //printf("%s\n", buf);
+            //printf("%s",pkts[0].payload);
+            //printf("%d\n",pkts[e].seqnum);
+            timer = setTimer();
+            buildPkt(&pkts[e], next_seqNum, 0, 0, 0, 0, 1, m, buf);
+            e += 1%9;
+            // =====================================
+            // Set full = 1
+            if (abs(e - s) >= WND_SIZE) {
+                full = 1; 
+            } else {
+                full = 0;
+            }
+        }
+        
+        if (isTimeout(timer)) {
+            printSend(&pkts[e], 1);
+            timer = setTimer();
+        }
+
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
-            break;
+            s += 1%9;
+            printRecv(&ackpkt);
         }
+
     }
 
     // *** End of your client implementation ***
@@ -223,7 +271,6 @@ int main (int argc, char *argv[])
     // =====================================
     // Connection Teardown: This procedure is provided to you directly and is
     // already working.
-
     struct packet finpkt, recvpkt;
     buildPkt(&finpkt, ackpkt.acknum, 0, 0, 1, 0, 0, 0, NULL);
     buildPkt(&ackpkt, (ackpkt.acknum + 1) % MAX_SEQN, (ackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, 0, NULL);
@@ -239,7 +286,6 @@ int main (int argc, char *argv[])
     while (1) {
         while (1) {
             n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-
             if (n > 0)
                 break;
             if (timerOn && isTimeout(timer)) {

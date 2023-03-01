@@ -199,21 +199,32 @@ int main (int argc, char *argv[])
         struct packet recvpkt;
 
         while(1) {
-            n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &cliaddr, (socklen_t *) &cliaddrlen);
-            if (n > 0) {
-                printRecv(&recvpkt);
-
-                if (recvpkt.fin) {
-                    cliSeqNum = (cliSeqNum + 1) % MAX_SEQN;
-
-                    buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
-                    printSend(&ackpkt, 0);
-                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
-
+            while(1) {
+                n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &cliaddr, (socklen_t *) &cliaddrlen);
+                //printf("%d", n);
+                if (n > 0)
                     break;
-                }
+                
             }
+            //printf("hi");
+            printRecv(&recvpkt);
+            if (recvpkt.fin) {
+                cliSeqNum = (cliSeqNum + 1) % MAX_SEQN;
+                buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                printSend(&ackpkt, 0);
+                sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                break;
+            }
+
+            //printRecv(&recvpkt);
+            fwrite(recvpkt.payload, 1, recvpkt.length, fp);
+            cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
+            buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+            printSend(&ackpkt, 0);
+            sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+            
         }
+            
 
         // *** End of your server implementation ***
 

@@ -1,6 +1,12 @@
 # CS118 Project 2
 
-This is the repo for Winter 2023 cs118 project 2.
+Simple Window Based Reliable Data Transfer
+
+## Members
+
+Dylan Phe 505834475
+
+Xuanzhe Han 505536013
 
 ## Makefile
 
