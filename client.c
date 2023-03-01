@@ -245,16 +245,17 @@ int main (int argc, char *argv[])
             e += 1%9;
             // =====================================
             // Set full = 1
-            if (abs(e - s) >= WND_SIZE) {
-                full = 1; 
-            } else {
-                full = 0;
-            }
         }
-        
+
         if (isTimeout(timer)) {
             printSend(&pkts[e], 1);
             timer = setTimer();
+        }
+
+        if (abs(e - s) >= WND_SIZE) {
+            full = 1; 
+        } else {
+            full = 0;
         }
 
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
@@ -262,6 +263,7 @@ int main (int argc, char *argv[])
             s += 1%9;
             printRecv(&ackpkt);
         }
+        //Sprintf("%d\n",e-s);
 
     }
 
