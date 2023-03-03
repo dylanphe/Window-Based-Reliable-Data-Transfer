@@ -60,6 +60,7 @@ void buildPkt(struct packet* pkt, unsigned short seqnum, unsigned short acknum, 
     pkt->ack = ack;
     pkt->dupack = dupack;
     pkt->length = length;
+    //printf("%s",payload);
     memcpy(pkt->payload, payload, length);
 }
 
@@ -201,10 +202,15 @@ int main (int argc, char *argv[])
     sendto(sockfd, &pkts[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
     timer = setTimer();
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
-    e += 1%9;
 
+    // Extra implementation:
+    // Update e, the next packet to be sent
+    // Initilized bytesent to keep track of total byte sents
+    e += 1;
+    e %= 10;
     int bytesent = m;
-    //printf("%d\n",bytesent);
+    // printf("%d\n",bytesent);
+
     // =====================================
     // *** TODO: Implement the rest of reliable transfer in the client ***
     // Implement GBN for basic requirement or Selective Repeat to receive bonus
@@ -214,6 +220,7 @@ int main (int argc, char *argv[])
     //       handling data loss.
     //       Only for demo purpose. DO NOT USE IT in your final submission
 
+    // Check file size to set boundary
     long f_size;
     fseek(fp, 0, SEEK_END);
     f_size = ftell(fp);
@@ -222,37 +229,45 @@ int main (int argc, char *argv[])
     sprintf(f_len, "%ld", f_size);
     //printf("%lu\n",f_size);
 
-    while (abs(e-s) != 0) {
+    while (1) {
+        //printf("%d\n", e-s);
         // =====================================
-        // Send Subsequent Packets while WND is not full
+        // Send Subsequent Packets while WND is not full and 
+        // total byte sent has not exceed the file size
         if (full != 1 && bytesent < f_size) {
+            printf("%d, %d\n", e, s);
             int next_seqNum = seqNum+bytesent;
+            // Move pointer to the next byte to be sent so that 
+            // fread can read the correct byte from the file
             fseek(fp, bytesent, SEEK_SET);
             m = fread(buf, 1, ((f_size-bytesent) <= PAYLOAD_SIZE ? (f_size-bytesent) : PAYLOAD_SIZE), fp);
-            //printf("%s\n", buf);
+            //printf("%d\n", bytesent);
+            //printf("%ld\n", f_size-bytesent);
+            // Update bytesent so far
             bytesent += m;
-            //printf("here %ld\n",f_size-bytesent);
-            //printf("%zu\n", m);
+            // Build the packet and send (with set timer)
+            // Build retransmission packet as well
             buildPkt(&pkts[e], next_seqNum, 0, 0, 0, 0, 0, m, buf);
-            //printf("%s",pkts[e].payload);
             printSend(&pkts[e], 0);
             sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-            //printf("%s\n", buf);
-            //printf("%s",pkts[0].payload);
-            //printf("%d\n",pkts[e].seqnum);
             timer = setTimer();
             buildPkt(&pkts[e], next_seqNum, 0, 0, 0, 0, 1, m, buf);
-            e += 1%9;
-            // =====================================
-            // Set full = 1
+            e += 1;
+            e %= 10;
         }
+        //printf("%d, %d\n", e, s);
 
         if (isTimeout(timer)) {
+            //printf("in\n");
             printSend(&pkts[e], 1);
+            for (int i = s; i < e || i < 10; i++) {
+                printf("%d, %d\n", s, e);
+                sendto(sockfd, &pkts[i], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+            }
             timer = setTimer();
         }
 
-        if (abs(e - s) >= WND_SIZE) {
+        if (abs(e - s) + 1 >= WND_SIZE) {
             full = 1; 
         } else {
             full = 0;
@@ -260,8 +275,16 @@ int main (int argc, char *argv[])
 
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
-            s += 1%9;
-            printRecv(&ackpkt);
+            if (!ackpkt.dupack) {
+                s += 1;
+                s %= 10;
+                printRecv(&ackpkt);
+                timer = setTimer();
+            }
+
+            if (ackpkt.acknum >= f_size ) {
+                break;
+            }
         }
         //Sprintf("%d\n",e-s);
 
