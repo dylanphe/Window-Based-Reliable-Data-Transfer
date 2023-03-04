@@ -229,7 +229,7 @@ int main (int argc, char *argv[])
     while (1) {
         // Send Subsequent Packets while WND is not full and 
         // total byte sent has not exceed the file size
-        if (full != 1 && bytesent <= f_size) {
+        if (full != 1 && bytesent < f_size) {
             int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
             // Move pointer to the next byte to be sent so that 
             // fread can read the correct byte from the file
@@ -301,9 +301,6 @@ int main (int argc, char *argv[])
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
             // Loop breaker: when file size reached for 
-            if (oldacked+PAYLOAD_SIZE > f_size) {
-                break;
-            }
             if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN) {
                 oldacked += pkts[s].length;
                 s += 1;
@@ -316,6 +313,9 @@ int main (int argc, char *argv[])
                 if (!ackpkt.dupack)
                     timer = setTimer();
             } 
+            if (oldacked+PAYLOAD_SIZE > f_size) {
+                break;
+            }
         }
         //Sprintf("%d\n",e-s);
     }
