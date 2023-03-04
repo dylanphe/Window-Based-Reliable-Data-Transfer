@@ -190,7 +190,6 @@ int main (int argc, char *argv[])
 
         // *** TODO: Implement the rest of reliable transfer in the server ***
         // Implement GBN for basic requirement or Selective Repeat to receive bonus
-
         // Note: the following code is not the complete logic. It only expects 
         //       a single data packet, and then tears down the connection
         //       without handling data loss.
@@ -200,45 +199,54 @@ int main (int argc, char *argv[])
         while(1) {
             n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &cliaddr, (socklen_t *) &cliaddrlen);
             if (n > 0) {
-                // neg: keep track of the directions of forward (seqnum of expected < seqnum of received)
-                int neg;
-                if (recvpkt.seqnum - cliSeqNum <= WND_SIZE*PAYLOAD_SIZE) {
-                    neg = 0;
-                } else {
-                    neg = 1;
-                }
-                // IN ORDER: 
+                // modl: Keeping track of the directions of forward 
+                // modl = 1 - seqnum of pkt received exceeded MAX_SEQN
+                // modl = 0 - seqnum of pkt received has not exceeded MAX_SEQN
+                int modl;
+                if (recvpkt.seqnum - cliSeqNum <= WND_SIZE*PAYLOAD_SIZE)
+                    modl = 0;
+                else 
+                    modl = 1;
+
+                // DETERMINE WHETHER RECVPKT IS IN-ORDER, OUT-OF-ORDER or OUTSIDE-OF-WND
+                // IN ORDER: print received receipt
                 if (recvpkt.seqnum == cliSeqNum && !recvpkt.fin) {
                     printRecv(&recvpkt);
                 } 
-                // OUT OF ORDER: SEND DUP CUML ACK OF OLDEST UNACKED
-                else if (recvpkt.seqnum > cliSeqNum && !recvpkt.fin && !neg) {
-                    //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
-                    buildPkt(&ackpkt, 0, cliSeqNum, 0, 0, 1, 0, 0, NULL);
-                    printSend(&ackpkt, 0);
-                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                if (!modl) {
+                    // OUT OF ORDER: send cumulative acknowledge of last correctly recvpkt
+                    if (recvpkt.seqnum > cliSeqNum && !recvpkt.fin) {
+                        //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
+                        buildPkt(&ackpkt, 0, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                        printSend(&ackpkt, 0);
+                        sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                    // OUT OF WNDSIZE: send duplicate reacknowledge to move s forward on the sender side
+                    } else if (recvpkt.seqnum < cliSeqNum && !recvpkt.fin) {
+                        //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
+                        buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 1, 0, NULL);
+                        printSend(&ackpkt, 0);
+                        sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                    }
                 }
-                // OUT OF ORDER NEG:
-                else if (recvpkt.seqnum > cliSeqNum && !recvpkt.fin && neg) {
-                    //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
-                    buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 1, 0, NULL);
-                    printSend(&ackpkt, 0);
-                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                else if (modl) {
+                    // OUT OF ORDER: send cumulative acknowledge of last correctly recvpkt
+                    if (recvpkt.seqnum < cliSeqNum && !recvpkt.fin) {
+                        //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
+                        buildPkt(&ackpkt, 0, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                        printSend(&ackpkt, 0);
+                        sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                    }
+                    // OUT OF WNDSIZE: send duplicate reacknowledge to move s forward on the sender side
+                    else if (recvpkt.seqnum > cliSeqNum && !recvpkt.fin) {
+                        //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
+                        buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 1, 0, NULL);
+                        printSend(&ackpkt, 0);
+                        sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                    }
                 }
-                // OUTSIDE OF WINDOW: SEND RE-ACKED
-                else if (recvpkt.seqnum < cliSeqNum && !recvpkt.fin && !neg) {
-                    //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
-                    buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 1, 0, NULL);
-                    printSend(&ackpkt, 0);
-                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
-                }
-                else if (recvpkt.seqnum < cliSeqNum && !recvpkt.fin && neg) {
-                    //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
-                    buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 1, 0, NULL);
-                    printSend(&ackpkt, 0);
-                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
-                }
-                else if (recvpkt.fin) {
+
+                // Loop breaker: when fin is received
+                if (recvpkt.fin) {
                     //printf("%d\n", cliSeqNum);
                     cliSeqNum = (cliSeqNum + 1) % MAX_SEQN;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 0, 1, 0, NULL);
@@ -246,9 +254,9 @@ int main (int argc, char *argv[])
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                     break;
                 }
-
-                //printRecv(&recvpkt);
-                if (recvpkt.seqnum == cliSeqNum) {
+                // If determined that ACK is correctly received,
+                // IN ORDER: print received receipt - WRITE TO THE FILE AND SEND ACK FOR NEXT EXPECTED PKT. 
+                else if (recvpkt.seqnum == cliSeqNum) {
                     fwrite(recvpkt.payload, 1, recvpkt.length, fp);
                     seqNum = recvpkt.acknum;
                     cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
@@ -262,7 +270,6 @@ int main (int argc, char *argv[])
             
 
         // *** End of your server implementation ***
-
         fclose(fp);
         // =====================================
         // Connection Teardown: This procedure is provided to you directly and
