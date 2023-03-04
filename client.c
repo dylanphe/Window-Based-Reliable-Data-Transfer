@@ -234,7 +234,7 @@ int main (int argc, char *argv[])
         // =====================================
         // Send Subsequent Packets while WND is not full and 
         // total byte sent has not exceed the file size
-        if (full != 1 && bytesent < f_size) {
+        if (full != 1 && bytesent <= f_size) {
             //printf("%d, %d\n", e, s);
             int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
             // Move pointer to the next byte to be sent so that 
@@ -255,15 +255,15 @@ int main (int argc, char *argv[])
         }
         //printf("%d, %d\n", e, s);
 
-        if (isTimeout(timer) && bytesent < f_size) {
+        if (isTimeout(timer)) {
             printTimeout(&pkts[s]);
             if (e == s) {
                 //printSend(&pkts[s], 1);
                 sendto(sockfd, &pkts[s], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-                int i = s+1;
+                int i = s;
                 //printf("%d, %d, %d\n", e, s, i);
-                while (abs(i%10) != e) {
-                    printf("%d\n",i);
+                while (i < e+10) {
+                    //printf("%d\n",i);
                     printSend(&pkts[abs(i%10)], 1);
                     sendto(sockfd, &pkts[abs(i%10)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
@@ -302,16 +302,21 @@ int main (int argc, char *argv[])
 
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
-            if (!ackpkt.dupack || ackpkt.acknum == (pkts[s].seqnum - pkts[s].length)) {
+            //printf("ack =%d\n",ackpkt.acknum);
+            //printf("seq %d\n",pkts[s].seqnum);
+            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN) {
+                ackrecv += pkts[s].length;
                 s += 1;
                 s %= 10;
                 printRecv(&ackpkt);
-                ackrecv += pkts[s].length;
+                //printf("len = %d\n", pkts[s].length);
+                //printf("total = %d\n", ackrecv);
+                //printf("%d\n", bytesent);
                 // timer is restart
-                timer = setTimer();
-            }
-
-            if (ackrecv >= f_size) {
+                if (!ackpkt.dupack)
+                    timer = setTimer();
+            } 
+            if (ackrecv+PAYLOAD_SIZE > f_size) {
                 break;
             }
         }

@@ -195,20 +195,46 @@ int main (int argc, char *argv[])
         //       a single data packet, and then tears down the connection
         //       without handling data loss.
         //       Only for demo purpose. DO NOT USE IT in your final submission
-        int byteExpected = cliSeqNum;
         struct packet recvpkt;
 
         while(1) {
             n = recvfrom(sockfd, &recvpkt, PKT_SIZE, 0, (struct sockaddr *) &cliaddr, (socklen_t *) &cliaddrlen);
             if (n > 0) {
-                // IN ORDER:
-                if (recvpkt.seqnum == byteExpected && !recvpkt.fin) {
+                // neg: keep track of the directions of forward (seqnum of expected < seqnum of received)
+                int neg;
+                if (recvpkt.seqnum - cliSeqNum <= WND_SIZE*PAYLOAD_SIZE) {
+                    neg = 0;
+                } else {
+                    neg = 1;
+                }
+                // IN ORDER: 
+                if (recvpkt.seqnum == cliSeqNum && !recvpkt.fin) {
                     printRecv(&recvpkt);
                 } 
-                // OUT OF ORDER: DUP ACK
-                else if (recvpkt.seqnum != byteExpected && !recvpkt.fin) {
-                    //printf("%d, %d\n", recvpkt.seqnum,  byteExpected);
-                    buildPkt(&ackpkt, 0, (byteExpected) % MAX_SEQN, 0, 0, 0, 1, 0, NULL);
+                // OUT OF ORDER: SEND DUP CUML ACK OF OLDEST UNACKED
+                else if (recvpkt.seqnum > cliSeqNum && !recvpkt.fin && !neg) {
+                    //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
+                    buildPkt(&ackpkt, 0, cliSeqNum, 0, 0, 1, 0, 0, NULL);
+                    printSend(&ackpkt, 0);
+                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                }
+                // OUT OF ORDER NEG:
+                else if (recvpkt.seqnum > cliSeqNum && !recvpkt.fin && neg) {
+                    //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
+                    buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 1, 0, NULL);
+                    printSend(&ackpkt, 0);
+                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                }
+                // OUTSIDE OF WINDOW: SEND RE-ACKED
+                else if (recvpkt.seqnum < cliSeqNum && !recvpkt.fin && !neg) {
+                    //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
+                    buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 1, 0, NULL);
+                    printSend(&ackpkt, 0);
+                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
+                }
+                else if (recvpkt.seqnum < cliSeqNum && !recvpkt.fin && neg) {
+                    //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
+                    buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 1, 0, NULL);
                     printSend(&ackpkt, 0);
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                 }
@@ -222,11 +248,10 @@ int main (int argc, char *argv[])
                 }
 
                 //printRecv(&recvpkt);
-                if (recvpkt.seqnum == byteExpected) {
+                if (recvpkt.seqnum == cliSeqNum) {
                     fwrite(recvpkt.payload, 1, recvpkt.length, fp);
                     seqNum = recvpkt.acknum;
                     cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
-                    byteExpected = cliSeqNum;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                     printSend(&ackpkt, 0);
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
