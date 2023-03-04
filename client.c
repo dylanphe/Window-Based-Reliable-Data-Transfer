@@ -237,14 +237,12 @@ int main (int argc, char *argv[])
             m = fread(buf, 1, ((f_size-bytesent) <= PAYLOAD_SIZE ? (f_size-bytesent) : PAYLOAD_SIZE), fp);
             // Update bytesent so far
             bytesent += m;
-            // Build the packet and send (with set timer)
+            // Build the packet and send 
             // Build retransmission packet as well
             // update e as well.
             buildPkt(&pkts[e], next_seqNum%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
             printSend(&pkts[e], 0);
             sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-            // TODO: timer should only be set for packet s? 
-            timer = setTimer();
             buildPkt(&pkts[e], next_seqNum%MAX_SEQN, 0, 0, 0, 0, 1, m, buf);
             e += 1;
             e %= 10;
@@ -302,8 +300,10 @@ int main (int argc, char *argv[])
         // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
-            //printf("ack =%d\n",ackpkt.acknum);
-            //printf("seq %d\n",pkts[s].seqnum);
+            // Loop breaker: when file size reached for 
+            if (oldacked+PAYLOAD_SIZE > f_size) {
+                break;
+            }
             if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN) {
                 oldacked += pkts[s].length;
                 s += 1;
@@ -316,10 +316,6 @@ int main (int argc, char *argv[])
                 if (!ackpkt.dupack)
                     timer = setTimer();
             } 
-            // Loop breaker: when file size reached for 
-            if (oldacked+PAYLOAD_SIZE > f_size) {
-                break;
-            }
         }
         //Sprintf("%d\n",e-s);
     }
