@@ -258,10 +258,10 @@ int main (int argc, char *argv[])
         if (isTimeout(timer) && bytesent < f_size) {
             printTimeout(&pkts[s]);
             if (e == s) {
-                printSend(&pkts[s], 1);
+                //printSend(&pkts[s], 1);
                 sendto(sockfd, &pkts[s], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                 int i = s+1;
-                printf("%d, %d, %d\n", e, s, i);
+                //printf("%d, %d, %d\n", e, s, i);
                 while (abs(i%10) != e) {
                     printf("%d\n",i);
                     printSend(&pkts[abs(i%10)], 1);
@@ -272,9 +272,9 @@ int main (int argc, char *argv[])
             }
             else if (e > s) {
                 int i = s;
-                printf("%d, %d, %d\n", e, s, i);
+                //printf("%d, %d, %d\n", e, s, i);
                 while (i < e) {
-                    printf("%d\n",i);
+                    //printf("%d\n",i);
                     printSend(&pkts[abs(i%10)], 1);
                     sendto(sockfd, &pkts[abs(i%10)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
@@ -283,9 +283,9 @@ int main (int argc, char *argv[])
             }
             else if (e < s) {
                 int i = s;
-                printf("%d, %d, %d\n", e, s, i);
+                //printf("%d, %d, %d\n", e, s, i);
                 while (i < e+10) {
-                    printf("%d\n",i);
+                    //printf("%d\n",i);
                     printSend(&pkts[abs(i%10)], 1);
                     sendto(sockfd, &pkts[abs(i%10)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
