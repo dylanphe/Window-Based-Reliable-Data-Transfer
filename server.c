@@ -15,7 +15,7 @@
 #define PKT_SIZE 524 /* total packet size */
 #define PAYLOAD_SIZE 512 /* PKT_SIZE - HDR_SIZE */
 #define WND_SIZE 10 /* window size*/
-#define MAX_SEQN 25601 /* number of sequence numbers [0-25600] */
+#define MAX_SEQN 25600 /* number of sequence numbers [0-25600] */
 
 // Packet Structure: Described in Section 2.1.1 of the spec. DO NOT CHANGE!
 struct packet {
@@ -171,7 +171,7 @@ int main (int argc, char *argv[])
 
                         seqNum = ackpkt.acknum;
                         cliSeqNum = (ackpkt.seqnum + ackpkt.length) % MAX_SEQN;
-
+                        
                         buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                         printSend(&ackpkt, 0);
                         sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
@@ -206,9 +206,10 @@ int main (int argc, char *argv[])
                     printRecv(&recvpkt);
                 } 
                 // OUT OF ORDER: DUP ACK
-                else if (recvpkt.seqnum > byteExpected && !recvpkt.fin) {
-                    buildPkt(&ackpkt, 0, cliSeqNum, 0, 0, 0, 1, 0, NULL);
-                    printSend(&ackpkt, 1);
+                else if (recvpkt.seqnum != byteExpected && !recvpkt.fin) {
+                    //printf("%d, %d\n", recvpkt.seqnum,  byteExpected);
+                    buildPkt(&ackpkt, 0, (byteExpected) % MAX_SEQN, 0, 0, 0, 1, 0, NULL);
+                    printSend(&ackpkt, 0);
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                 }
                 else if (recvpkt.fin) {
