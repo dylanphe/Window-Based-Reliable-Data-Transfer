@@ -223,7 +223,7 @@ int main (int argc, char *argv[])
                     // OUT OF WNDSIZE: send duplicate reacknowledge to move s forward on the sender side
                     } else if (recvpkt.seqnum < cliSeqNum && !recvpkt.fin) {
                         //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
-                        buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 0, 1, 0, NULL);
+                        buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 0, 0, NULL);
                         printSend(&ackpkt, 0);
                         sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                     }
@@ -239,7 +239,7 @@ int main (int argc, char *argv[])
                     // OUT OF WNDSIZE: send duplicate reacknowledge to move s forward on the sender side
                     else if (recvpkt.seqnum > cliSeqNum && !recvpkt.fin) {
                         //printf("%d, %d\n", recvpkt.seqnum,  cliSeqNum);
-                        buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 0, 1, 0, NULL);
+                        buildPkt(&ackpkt, 0, recvpkt.seqnum, 0, 0, 1, 0, 0, NULL);
                         printSend(&ackpkt, 0);
                         sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                     }
@@ -249,7 +249,7 @@ int main (int argc, char *argv[])
                 if (recvpkt.fin) {
                     //printf("%d\n", cliSeqNum);
                     cliSeqNum = (cliSeqNum + 1) % MAX_SEQN;
-                    buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 0, 1, 0, NULL);
+                    buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                     printSend(&ackpkt, 0);
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                     break;
@@ -258,7 +258,6 @@ int main (int argc, char *argv[])
                 // IN ORDER: print received receipt - WRITE TO THE FILE AND SEND ACK FOR NEXT EXPECTED PKT. 
                 else if (recvpkt.seqnum == cliSeqNum) {
                     fwrite(recvpkt.payload, 1, recvpkt.length, fp);
-                    seqNum = recvpkt.acknum;
                     cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                     printSend(&ackpkt, 0);

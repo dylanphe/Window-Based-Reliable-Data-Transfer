@@ -300,7 +300,6 @@ int main (int argc, char *argv[])
         // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
-            // Loop breaker: when file size reached for 
             if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN) {
                 oldacked += pkts[s].length;
                 s += 1;
@@ -313,7 +312,9 @@ int main (int argc, char *argv[])
                 if (!ackpkt.dupack)
                     timer = setTimer();
             } 
-            if (oldacked+PAYLOAD_SIZE > f_size) {
+            // Loop breaker: when file size reached for 
+            if (oldacked >= f_size) {
+                //printf("%ld, %d", f_size, oldacked);
                 break;
             }
         }
