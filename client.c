@@ -308,12 +308,11 @@ int main (int argc, char *argv[])
                 s += 1;
                 s %= 10;
                 printRecv(&ackpkt);
+                timer = setTimer();
                 //printf("len = %d\n", pkts[s].length);
                 //printf("total = %d\n", ackrecv);
                 //printf("%d\n", bytesent);
                 // timer is restart
-                if (!ackpkt.dupack)
-                    timer = setTimer();
             } 
             else if (ackpkt.dupack) {
                 printRecv(&ackpkt);
