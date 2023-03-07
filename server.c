@@ -213,6 +213,7 @@ int main (int argc, char *argv[])
                 // IN ORDER: print received receipt
                 //if (recvpkt.seqnum == cliSeqNum && !recvpkt.fin) {
                 // Loop breaker: when fin is received
+                printRecv(&recvpkt);
                 if (recvpkt.fin) {
                     //printf("%d\n", cliSeqNum);
                     printRecv(&recvpkt);
@@ -227,7 +228,6 @@ int main (int argc, char *argv[])
                 // IN ORDER: print received receipt - WRITE TO THE FILE AND SEND ACK FOR NEXT EXPECTED PKT. 
                 if (recvpkt.seqnum == cliSeqNum && !recvpkt.fin) {
                     if (lastSeqNum != recvpkt.seqnum) {
-                        printRecv(&recvpkt);
                         lastSeqNum = recvpkt.seqnum;
                         fwrite(recvpkt.payload, 1, recvpkt.length, fp);
                         cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
