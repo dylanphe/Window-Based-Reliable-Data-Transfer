@@ -17,7 +17,7 @@
 #define PKT_SIZE 524 /* total packet size */
 #define PAYLOAD_SIZE 512 /* PKT_SIZE - HDR_SIZE */
 #define WND_SIZE 10 /* window size*/
-#define MAX_SEQN 25600 /* number of sequence numbers [0-25600] */
+#define MAX_SEQN 25601 /* number of sequence numbers [0-25600] */
 #define FIN_WAIT 2 /* seconds to wait after receiving FIN*/
 
 // Packet Structure: Described in Section 2.1.1 of the spec. DO NOT CHANGE!
@@ -252,6 +252,7 @@ int main (int argc, char *argv[])
         // TIMEOUT
         if (isTimeout(timer)) {
             printTimeout(&pkts[s]);
+            //printf("%d, %d\n", e, s);
             // In case of full WND
             if (e == s) {
                 //printSend(&pkts[s], 1);
@@ -313,7 +314,7 @@ int main (int argc, char *argv[])
                     timer = setTimer();
             } 
             // Loop breaker: when file size reached for 
-            if (oldacked >= f_size) {
+            if (oldacked >= f_size && abs(e-s) == 0) {
                 //printf("%ld, %d", f_size, oldacked);
                 break;
             }
