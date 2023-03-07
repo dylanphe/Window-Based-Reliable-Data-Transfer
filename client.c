@@ -251,7 +251,30 @@ int main (int argc, char *argv[])
         //printf("%d, %d\n", e, s);
 
         // TIMEOUT
-        if (isTimeout(timer) && midtimerOn) {
+                // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
+        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+        if (n > 0) {
+            //printf("%d, %d\n", ackpkt.acknum, (pkts[s].seqnum + pkts[s].length)%MAX_SEQN);
+            // timer is restart
+            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack) {
+                oldacked += pkts[s].length;
+                s += 1;
+                s %= 10;
+                printRecv(&ackpkt);
+                timer = setTimer();
+            } 
+
+            else if (ackpkt.dupack) {
+                printRecv(&ackpkt);
+            }
+            // Loop breaker: when file size reached for 
+            if (oldacked >= f_size && abs(e-s) == 0) {
+                //printf("%ld, %d", f_size, oldacked);
+                midtimerOn = 0;
+                break;
+            }
+        } 
+        else if (isTimeout(timer) && midtimerOn) {
             printTimeout(&pkts[s]);
             //printf("%d, %d\n", e, s);
             // In case of full WND
@@ -299,29 +322,6 @@ int main (int argc, char *argv[])
             full = 0;
         }
 
-        // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
-        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-        if (n > 0) {
-            //printf("%d, %d\n", ackpkt.acknum, (pkts[s].seqnum + pkts[s].length)%MAX_SEQN);
-            // timer is restart
-            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack) {
-                oldacked += pkts[s].length;
-                s += 1;
-                s %= 10;
-                printRecv(&ackpkt);
-                timer = setTimer();
-            } 
-
-            else if (ackpkt.dupack) {
-                printRecv(&ackpkt);
-            }
-            // Loop breaker: when file size reached for 
-            if (oldacked >= f_size && abs(e-s) == 0) {
-                //printf("%ld, %d", f_size, oldacked);
-                midtimerOn = 0;
-                break;
-            }
-        }
         //Sprintf("%d\n",e-s);
     }
 
