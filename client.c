@@ -207,8 +207,8 @@ int main (int argc, char *argv[])
     // oldacked - keep track of oldest ack
     e += 1;
     e %= 10;
-    int bytesent = m;
-    int oldacked = 0;
+    long bytesent = m;
+    long oldacked = 0;
     // =====================================
     // *** TODO: Implement the rest of reliable transfer in the client ***
     // Implement GBN for basic requirement or Selective Repeat to receive bonus
@@ -229,8 +229,13 @@ int main (int argc, char *argv[])
     while (1) {
         // Send Subsequent Packets while WND is not full and 
         // total byte sent has not exceed the file size
+        //printf("bytesent: %ld, file_size: %ld\n", bytesent, f_size);
+        // if(bytesent >= f_size && oldacked < f_size){
+        //     bytesent = oldacked;
+        // }
         if (full != 1 && bytesent < f_size) {
             int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
+            //printf("next seq number is: %d\n", next_seqNum);
             // Move pointer to the next byte to be sent so that 
             // fread can read the correct byte from the file
             fseek(fp, bytesent, SEEK_SET);
@@ -247,12 +252,22 @@ int main (int argc, char *argv[])
             e += 1;
             e %= 10;
         }
+        // else if (full != 1 && oldacked < f_size) {
+        //     int next_seqNum = (seqNum + oldacked)%MAX_SEQN;
+        //     fseek(fp, oldacked, SEEK_SET);
+        //     m = fread(buf, 1, ((f_size-oldacked) <= PAYLOAD_SIZE ? (f_size-oldacked) : PAYLOAD_SIZE), fp);
+        //     buildPkt(&pkts[e], next_seqNum%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
+        //     printSend(&pkts[e], 0);
+        //     sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+        //     e += 1;
+        //     e %= 10;
+        // }
         //printf("%d, %d\n", e, s);
 
         // TIMEOUT
         if (isTimeout(timer)) {
             printTimeout(&pkts[s]);
-            //printf("%d, %d\n", e, s);
+            //printf("e is: %d and s is: %d\n", e, s);
             // In case of full WND
             if (e == s) {
                 //printSend(&pkts[s], 1);
@@ -298,14 +313,27 @@ int main (int argc, char *argv[])
             full = 0;
         }
 
+
         // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
+            //printf("current pkt acknum is %d\n", ackpkt.acknum);
+            if(!ackpkt.dupack && ackpkt.acknum != (pkts[s].seqnum + pkts[s].length)%MAX_SEQN){
+                printRecv(&ackpkt);
+                while((pkts[s].seqnum + pkts[s].length)%MAX_SEQN != ackpkt.acknum){
+                    oldacked += pkts[s].length;
+                    s += 1;
+                    s %= 10;
+                }
+                timer = setTimer();
+            }
             if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN) {
                 oldacked += pkts[s].length;
                 s += 1;
                 s %= 10;
                 printRecv(&ackpkt);
+                //printf("oldack is: %ld, bytesent is: %ld\n", oldacked, bytesent);
+                //printf("oldest acked packet: %d\n", oldacked);
                 //printf("len = %d\n", pkts[s].length);
                 //printf("total = %d\n", ackrecv);
                 //printf("%d\n", bytesent);
