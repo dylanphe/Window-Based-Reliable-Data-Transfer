@@ -304,7 +304,7 @@ int main (int argc, char *argv[])
         if (n > 0) {
             //printf("%d, %d\n", ackpkt.acknum, (pkts[s].seqnum + pkts[s].length)%MAX_SEQN);
             // timer is restart
-            if (ackpkt.acknum >= (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack) {
+            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack) {
                 oldacked += pkts[s].length;
                 s += 1;
                 s %= 10;

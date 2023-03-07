@@ -212,10 +212,10 @@ int main (int argc, char *argv[])
                 // DETERMINE WHETHER RECVPKT IS IN-ORDER, OUT-OF-ORDER or OUTSIDE-OF-WND
                 // IN ORDER: print received receipt
                 //if (recvpkt.seqnum == cliSeqNum && !recvpkt.fin) {
-                printRecv(&recvpkt);
                 // Loop breaker: when fin is received
                 if (recvpkt.fin) {
                     //printf("%d\n", cliSeqNum);
+                    printRecv(&recvpkt);
                     cliSeqNum = (cliSeqNum + 1) % MAX_SEQN;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                     printSend(&ackpkt, 0);
@@ -227,6 +227,7 @@ int main (int argc, char *argv[])
                 // IN ORDER: print received receipt - WRITE TO THE FILE AND SEND ACK FOR NEXT EXPECTED PKT. 
                 if (recvpkt.seqnum == cliSeqNum && !recvpkt.fin) {
                     if (lastSeqNum != recvpkt.seqnum) {
+                        printRecv(&recvpkt);
                         lastSeqNum = recvpkt.seqnum;
                         fwrite(recvpkt.payload, 1, recvpkt.length, fp);
                         cliSeqNum = (recvpkt.seqnum + recvpkt.length) % MAX_SEQN;
