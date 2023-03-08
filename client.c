@@ -200,6 +200,7 @@ int main (int argc, char *argv[])
     printSend(&pkts[0], 0);
     sendto(sockfd, &pkts[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
     timer = setTimer();
+    //printf("set timer for packet %d\n", pkts[s].seqnum);
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
     // Update e, the next packet to be sent
@@ -226,6 +227,7 @@ int main (int argc, char *argv[])
     char f_len[sizeof(long)*8+1];
     sprintf(f_len, "%ld", f_size);
     int midtimerOn = 1;
+    //int timerexist = 1;
 
     while (1) {
         // Send Subsequent Packets while WND is not full and 
@@ -244,6 +246,10 @@ int main (int argc, char *argv[])
             buildPkt(&pkts[e], next_seqNum%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
             printSend(&pkts[e], 0);
             sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+            // if(timerexist){
+            //     timer = setTimer();
+            //     timerexist = 0;
+            // }
             //buildPkt(&pkts[e], next_seqNum%MAX_SEQN, 0, 0, 0, 0, 1, m, buf);
             e += 1;
             e %= 10;
@@ -257,16 +263,56 @@ int main (int argc, char *argv[])
             //printf("%d, %d\n", ackpkt.acknum, (pkts[s].seqnum + pkts[s].length)%MAX_SEQN);
             // timer is restart
             if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack) {
+                //printf("old ack was: %d ", oldacked);
                 oldacked += pkts[s].length;
+                //printf("old ack is now %d\n", oldacked);
                 s += 1;
                 s %= 10;
                 printRecv(&ackpkt);
                 timer = setTimer();
+                //printf("set timer for packet %d\n", pkts[s].seqnum);
             } 
 
+            else if (ackpkt.acknum > (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack){
+                printRecv(&ackpkt);
+                //printf("need to readjust window, current: %d. next: %d\n",(pkts[s].seqnum + pkts[s].length)%MAX_SEQN, ackpkt.acknum);
+                while((pkts[s].seqnum + pkts[s].length)%MAX_SEQN != ackpkt.acknum){
+                    //printf("adjust window, oldacked was: %d ", oldacked);
+                    oldacked += pkts[s].length;
+                    s += 1;
+                    s %= 10;
+                    //printf("oldacked is now: %d, and s is: %d, and e is: %d\n", oldacked, s, e);
+                    if (bytesent < f_size && (oldacked < f_size && abs(e-s) != 0)) {
+                        int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
+                        // Move pointer to the next byte to be sent so that 
+                        // fread can read the correct byte from the file
+                        fseek(fp, bytesent, SEEK_SET);
+                        m = fread(buf, 1, ((f_size-bytesent) <= PAYLOAD_SIZE ? (f_size-bytesent) : PAYLOAD_SIZE), fp);
+                        // Update bytesent so far
+                        bytesent += m;
+                        // Build the packet and send 
+                        // Build retransmission packet as well
+                        // update e as well.
+                        buildPkt(&pkts[e], next_seqNum%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
+                        printSend(&pkts[e], 0);
+                        sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                        e += 1;
+                        e %= 10;
+                        //printf("bytesent is now: %d, e is: %d\n", bytesent, e);
+                    } else {
+                        break;
+                        //printf("bye\n");
+                    }
+                }
+                oldacked += pkts[s].length;
+                s += 1;
+                s %= 10;
+                timer = setTimer();
+            }
             else if (ackpkt.dupack) {
                 printRecv(&ackpkt);
             }
+            
             // Loop breaker: when file size reached for 
             if (oldacked >= f_size && abs(e-s) == 0) {
                 //printf("%ld, %d", f_size, oldacked);
@@ -290,6 +336,7 @@ int main (int argc, char *argv[])
                     i++;
                 }
                 timer = setTimer();
+                //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
             else if (e > s) {
                 int i = s;
@@ -301,6 +348,7 @@ int main (int argc, char *argv[])
                     i++;
                 }
                 timer = setTimer();
+                //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
             else if (e < s) {
                 int i = s;
@@ -312,6 +360,7 @@ int main (int argc, char *argv[])
                     i++;
                 }
                 timer = setTimer();
+                //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
         }
 
