@@ -273,7 +273,7 @@ int main (int argc, char *argv[])
                 //printf("set timer for packet %d\n", pkts[s].seqnum);
             } 
 
-            else if (ackpkt.acknum > (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack){
+            else if ((ackpkt.acknum > (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack)){
                 printRecv(&ackpkt);
                 //printf("need to readjust window, current: %d. next: %d\n",(pkts[s].seqnum + pkts[s].length)%MAX_SEQN, ackpkt.acknum);
                 while((pkts[s].seqnum + pkts[s].length)%MAX_SEQN != ackpkt.acknum){
