@@ -297,7 +297,7 @@ int main (int argc, char *argv[])
             }
         }
         // If sender received an ACK of the last byte it is expected to send (bytesent+2)
-        if (ackpkt.acknum == (bytesent+2)%MAX_SEQN && bytesent >= f_size) {
+        if (ackpkt.acknum == (bytesent+seqNum)%MAX_SEQN && bytesent >= f_size) {
                 sendertimerOn = 0;
                 break;
         }
