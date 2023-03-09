@@ -189,11 +189,9 @@ int main (int argc, char *argv[])
     int s = 0;
     // index of the next packet to be sent
     int e = 0;
-    int full = 0;
 
     // =====================================
     // Send First Packet (ACK containing payload)
-
     m = fread(buf, 1, PAYLOAD_SIZE, fp);
     //printf("%s\n", buf);
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 1, 0, m, buf);
@@ -209,7 +207,6 @@ int main (int argc, char *argv[])
     e += 1;
     e %= 10;
     int bytesent = m;
-    int oldacked = 0;
     // =====================================
     // *** TODO: Implement the rest of reliable transfer in the client ***
     // Implement GBN for basic requirement or Selective Repeat to receive bonus
@@ -227,6 +224,7 @@ int main (int argc, char *argv[])
     char f_len[sizeof(long)*8+1];
     sprintf(f_len, "%ld", f_size);
     int sendertimerOn=0;
+
     
     for (int i = 1; i < WND_SIZE; i++) {
         int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
@@ -247,58 +245,61 @@ int main (int argc, char *argv[])
         e %= 10;
     }
 
+    sendertimerOn=1;
+    timer = setTimer();
     while (1) {
-        // Send Subsequent Packets while WND is not full and 
-        if (abs(e-s)!=0 && bytesent < f_size) {
-            int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
-            // Move pointer to the next byte to be sent so that 
-            // fread can read the correct byte from the file
-            fseek(fp, bytesent, SEEK_SET);
-            m = fread(buf, 1, ((f_size-bytesent) <= PAYLOAD_SIZE ? (f_size-bytesent) : PAYLOAD_SIZE), fp);
-            // Update bytesent so far
-            bytesent += m;
-            // Build the packet and send 
-            buildPkt(&pkts[e], (next_seqNum)%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
-            printSend(&pkts[e], 0);
-            sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-            e += 1;
-            e %= 10;
-        }
-        // total byte sent has not exceed the file size
+        // If a packet is received
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
             printRecv(&ackpkt);
-            // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
-            //printf("%d, %d\n",ackpkt.acknum, pkts[s].seqnum);
-            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack) {
-                //printf("old ack was: %d ", oldacked);
-                oldacked += pkts[s].length;
-                s += 1;
-                s %= 10; 
-                //printf("%d, %d\n",s, pkts[s].seqnum);
-                sendertimerOn = 1;
-                timer = setTimer();
-                //printf("set timer for packet %d\n", pkts[s].seqnum);
-            } 
-            else if (ackpkt.acknum != (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack)
-            {   
+            if (!ackpkt.dupack) {
+                int base = s;
+                // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
+                if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN) {
+                    s += 1;
+                    s %= 10;
+                    timer = setTimer();
+                }   
+                // If received OUT OF ORDER ACK, and not a duplicate, overflow might occurs due to loss ACK which 
+                // cause the sender's base to get stuck. In such case, we'll loop through the window to the index
+                // containing the most recent correctly received packet by the receiver for window synchronization.
+                else {
                     for(int i = s; i < s+WND_SIZE; i++) {
-                        int correctlyRcvd = i%WND_SIZE;
-                        oldacked += pkts[i].length;
-                        if((pkts[correctlyRcvd].seqnum + pkts[correctlyRcvd].length) % MAX_SEQN == ackpkt.acknum) {
-                            s = (correctlyRcvd+1) % WND_SIZE;
+                        int rcvdExpectSeq = i%WND_SIZE;
+                        if(ackpkt.acknum == (pkts[rcvdExpectSeq].seqnum + pkts[rcvdExpectSeq].length) % MAX_SEQN) {
+                            s = (rcvdExpectSeq) % WND_SIZE;
                             break;
                         }
-                    }
-            }
+                    }  
+                }
 
-            // Loop breaker: when file size reached for 
-            //printf("%d\n", oldacked);
-            if (oldacked >= f_size) {
-                //printf("%ld, %d", f_size, oldacked);
+                // Window synchronizing RcvrExpectedSeq and send subsequent packets
+                int i=0;
+                int overflow = ((s+WND_SIZE) - base) % WND_SIZE;
+                while (i <= overflow) {
+                    if ( abs(e-s)!=0 && bytesent < f_size ) {
+                        int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
+                        // Move pointer to the next byte to be sent so that 
+                        // fread can read the correct byte from the file
+                        fseek(fp, bytesent, SEEK_SET);
+                        m = fread(buf, 1, ((f_size-bytesent) <= PAYLOAD_SIZE ? (f_size-bytesent) : PAYLOAD_SIZE), fp);
+                        // Update bytesent so far
+                        bytesent += m;
+                        // Build the packet and send 
+                        buildPkt(&pkts[e], (next_seqNum)%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
+                        printSend(&pkts[e], 0);
+                        sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                        e += 1;
+                        e %= 10;
+                    }
+                    i++;
+                }
+            }
+        }
+        // If sender received an ACK of the last byte it is expected to send (bytesent+2)
+        if (ackpkt.acknum == (bytesent+2)%MAX_SEQN && bytesent >= f_size) {
                 sendertimerOn = 0;
                 break;
-            }
         }
 
         if (isTimeout(timer) && sendertimerOn) {
@@ -314,7 +315,6 @@ int main (int argc, char *argv[])
                     sendto(sockfd, &pkts[abs(i%WND_SIZE)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
                 }
-                timer = setTimer();
                 //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
             else if (e > s) {
@@ -326,7 +326,6 @@ int main (int argc, char *argv[])
                     sendto(sockfd, &pkts[abs(i%WND_SIZE)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
                 }
-                timer = setTimer();
                 //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
             else if (e < s) {
@@ -338,17 +337,11 @@ int main (int argc, char *argv[])
                     sendto(sockfd, &pkts[abs(i%WND_SIZE)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
                 }
-                timer = setTimer();
                 //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
+            timer = setTimer();
         }
-        // Determine if window is full or not.
-        if (abs(e - s) == 0) {
-            full = 1; 
-        } else {
-            full = 0;
-        }
-        //Sprintf("%d\n",e-s);
+        
     }
 
     // *** End of your client implementation ***
