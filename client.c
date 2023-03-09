@@ -271,7 +271,7 @@ int main (int argc, char *argv[])
                     for(int i = s; i < s+WND_SIZE; i++) {
                         int rcvdExpectSeq = i%WND_SIZE;
                         if(ackpkt.acknum == (pkts[rcvdExpectSeq].seqnum + pkts[rcvdExpectSeq].length) % MAX_SEQN) {
-                            s = (rcvdExpectSeq+1) % WND_SIZE;
+                            s = (rcvdExpectSeq+1)%WND_SIZE;
                             break;
                         }
                     }  
@@ -280,7 +280,7 @@ int main (int argc, char *argv[])
                 // Window synchronizing RcvrExpectedSeq and send subsequent packets
                 int i=0;
                 int overflow = ((s+WND_SIZE) - base) % WND_SIZE;
-                while (i <= overflow) {
+                while (i < overflow) {
                     if ( abs(e-s)!=0 && bytesent < f_size ) {
                         int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
                         // Move pointer to the next byte to be sent so that 
