@@ -200,6 +200,7 @@ int main (int argc, char *argv[])
     printSend(&pkts[0], 0);
     sendto(sockfd, &pkts[0], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
     timer = setTimer();
+    //printf("set timer for packet %d\n", pkts[s].seqnum);
     buildPkt(&pkts[0], seqNum, (synackpkt.seqnum + 1) % MAX_SEQN, 0, 0, 0, 1, m, buf);
 
     // Update e, the next packet to be sent
@@ -225,11 +226,11 @@ int main (int argc, char *argv[])
     rewind(fp);
     char f_len[sizeof(long)*8+1];
     sprintf(f_len, "%ld", f_size);
-
+    int sendertimerOn = 1;
     while (1) {
         // Send Subsequent Packets while WND is not full and 
         // total byte sent has not exceed the file size
-        if (full != 1 && bytesent < f_size) {
+        if (abs(e-s)!=0 && bytesent < f_size) {
             int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
             // Move pointer to the next byte to be sent so that 
             // fread can read the correct byte from the file
@@ -238,21 +239,42 @@ int main (int argc, char *argv[])
             // Update bytesent so far
             bytesent += m;
             // Build the packet and send 
-            // Build retransmission packet as well
-            // update e as well.
-            buildPkt(&pkts[e], next_seqNum%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
+            buildPkt(&pkts[e], (next_seqNum)%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
             printSend(&pkts[e], 0);
             sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
-            //buildPkt(&pkts[e], next_seqNum%MAX_SEQN, 0, 0, 0, 0, 1, m, buf);
             e += 1;
             e %= 10;
         }
-        //printf("%d, %d\n", e, s);
 
-        // TIMEOUT
-        if (isTimeout(timer)) {
+        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
+        if (n > 0) {
+            printRecv(&ackpkt);
+            // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
+            //printf("%d, %d\n",ackpkt.acknum, pkts[s].seqnum);
+            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack) {
+                //printf("old ack was: %d ", oldacked);
+                oldacked += pkts[s].length;
+                s += 1;
+                s %= 10; 
+                //printf("%d, %d\n",s, pkts[s].seqnum);
+                sendertimerOn = 1;
+                timer = setTimer();
+                //printf("set timer for packet %d\n", pkts[s].seqnum);
+            }
+            else if (ackpkt.acknum == (pkts[s].seqnum)%MAX_SEQN) {
+                sendertimerOn = 0;
+            }
+            // Loop breaker: when file size reached for 
+            printf("%d\n", oldacked);
+            if (oldacked >= f_size) {
+                //printf("%ld, %d", f_size, oldacked);
+                sendertimerOn = 0;
+                break;
+            }
+        }
+
+        if (isTimeout(timer) && sendertimerOn) {
             printTimeout(&pkts[s]);
-            //printf("%d, %d\n", e, s);
             // In case of full WND
             if (e == s) {
                 //printSend(&pkts[s], 1);
@@ -266,6 +288,7 @@ int main (int argc, char *argv[])
                     i++;
                 }
                 timer = setTimer();
+                //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
             else if (e > s) {
                 int i = s;
@@ -277,6 +300,7 @@ int main (int argc, char *argv[])
                     i++;
                 }
                 timer = setTimer();
+                //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
             else if (e < s) {
                 int i = s;
@@ -288,36 +312,14 @@ int main (int argc, char *argv[])
                     i++;
                 }
                 timer = setTimer();
+                //printf("set timer for packet %d\n", pkts[s].seqnum);
             }
         }
-
         // Determine if window is full or not.
         if (abs(e - s) == 0) {
             full = 1; 
         } else {
             full = 0;
-        }
-
-        // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
-        n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
-        if (n > 0) {
-            if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN) {
-                oldacked += pkts[s].length;
-                s += 1;
-                s %= 10;
-                printRecv(&ackpkt);
-                //printf("len = %d\n", pkts[s].length);
-                //printf("total = %d\n", ackrecv);
-                //printf("%d\n", bytesent);
-                // timer is restart
-                if (!ackpkt.dupack)
-                    timer = setTimer();
-            } 
-            // Loop breaker: when file size reached for 
-            if (oldacked >= f_size && abs(e-s) == 0) {
-                //printf("%ld, %d", f_size, oldacked);
-                break;
-            }
         }
         //Sprintf("%d\n",e-s);
     }
