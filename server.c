@@ -211,7 +211,6 @@ int main (int argc, char *argv[])
                 else 
                     modl = 1;*/
                 // Loop breaker: when fin is received
-                printRecv(&recvpkt);
                 if (recvpkt.fin) {
                     //printf("%d\n", cliSeqNum);
                     printRecv(&recvpkt);
