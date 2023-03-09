@@ -225,6 +225,8 @@ int main (int argc, char *argv[])
     sprintf(f_len, "%ld", f_size);
     int sendertimerOn=0;
 
+    unsigned short last_acknum = 0;
+
     
     for (int i = 1; i < WND_SIZE; i++) {
         int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
@@ -252,14 +254,16 @@ int main (int argc, char *argv[])
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
             printRecv(&ackpkt);
-            if (!ackpkt.dupack) {
+            if (!ackpkt.dupack || last_acknum != ackpkt.acknum) {
+                last_acknum = ackpkt.acknum;
                 int base = s;
                 // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
+                //printf("current ack num: %d, expected ack num: %d\n", ackpkt.acknum, (pkts[s].seqnum + pkts[s].length)%MAX_SEQN);
                 if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN) {
                     s += 1;
                     s %= 10;
                     timer = setTimer();
-                }   
+                } 
                 // If received OUT OF ORDER ACK, and not a duplicate, overflow might occurs due to loss ACK which 
                 // cause the sender's base to get stuck. In such case, we'll loop through the window to the index
                 // containing the most recent correctly received packet by the receiver for window synchronization.
