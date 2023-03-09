@@ -226,10 +226,29 @@ int main (int argc, char *argv[])
     rewind(fp);
     char f_len[sizeof(long)*8+1];
     sprintf(f_len, "%ld", f_size);
-    int sendertimerOn = 1;
+    int sendertimerOn=0;
+    
+    for (int i = 1; i < WND_SIZE; i++) {
+        int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
+        // Move pointer to the next byte to be sent so that 
+        // fread can read the correct byte from the file
+        fseek(fp, bytesent, SEEK_SET);
+        m = fread(buf, 1, ((f_size-bytesent) <= PAYLOAD_SIZE ? (f_size-bytesent) : PAYLOAD_SIZE), fp);
+        if (m == 0) {
+            break;
+        } 
+        // Update bytesent so far
+        bytesent += m;
+        // Build the packet and send 
+        buildPkt(&pkts[e], (next_seqNum)%MAX_SEQN, 0, 0, 0, 0, 0, m, buf);
+        printSend(&pkts[e], 0);
+        sendto(sockfd, &pkts[e], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+        e += 1;
+        e %= 10;
+    }
+
     while (1) {
         // Send Subsequent Packets while WND is not full and 
-        // total byte sent has not exceed the file size
         if (abs(e-s)!=0 && bytesent < f_size) {
             int next_seqNum = (seqNum+bytesent)%MAX_SEQN;
             // Move pointer to the next byte to be sent so that 
@@ -245,7 +264,7 @@ int main (int argc, char *argv[])
             e += 1;
             e %= 10;
         }
-
+        // total byte sent has not exceed the file size
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
             printRecv(&ackpkt);
@@ -260,12 +279,21 @@ int main (int argc, char *argv[])
                 sendertimerOn = 1;
                 timer = setTimer();
                 //printf("set timer for packet %d\n", pkts[s].seqnum);
+            } 
+            else if (ackpkt.acknum != (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack)
+            {   
+                    for(int i = s; i < s+WND_SIZE; i++) {
+                        int correctlyRcvd = i%WND_SIZE;
+                        oldacked += pkts[i].length;
+                        if((pkts[correctlyRcvd].seqnum + pkts[correctlyRcvd].length) % MAX_SEQN == ackpkt.acknum) {
+                            s = (correctlyRcvd+1) % WND_SIZE;
+                            break;
+                        }
+                    }
             }
-            else if (ackpkt.acknum == (pkts[s].seqnum)%MAX_SEQN) {
-                sendertimerOn = 0;
-            }
+
             // Loop breaker: when file size reached for 
-            //printf("%d\n", oldacked);
+            printf("%d\n", oldacked);
             if (oldacked >= f_size) {
                 //printf("%ld, %d", f_size, oldacked);
                 sendertimerOn = 0;
@@ -281,10 +309,10 @@ int main (int argc, char *argv[])
                 sendto(sockfd, &pkts[s], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                 int i = s;
                 //printf("%d, %d, %d\n", e, s, i);
-                while (i < e+10) {
+                while (i < e+WND_SIZE) {
                     //printf("%d\n",i);
-                    printSend(&pkts[abs(i%10)], 1);
-                    sendto(sockfd, &pkts[abs(i%10)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                    printSend(&pkts[abs(i%WND_SIZE)], 1);
+                    sendto(sockfd, &pkts[abs(i%WND_SIZE)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
                 }
                 timer = setTimer();
@@ -295,8 +323,8 @@ int main (int argc, char *argv[])
                 //printf("%d, %d, %d\n", e, s, i);
                 while (i < e) {
                     //printf("%d\n",i);
-                    printSend(&pkts[abs(i%10)], 1);
-                    sendto(sockfd, &pkts[abs(i%10)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                    printSend(&pkts[abs(i%WND_SIZE)], 1);
+                    sendto(sockfd, &pkts[abs(i%WND_SIZE)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
                 }
                 timer = setTimer();
@@ -305,10 +333,10 @@ int main (int argc, char *argv[])
             else if (e < s) {
                 int i = s;
                 //printf("%d, %d, %d\n", e, s, i);
-                while (i < e+10) {
+                while (i < e+WND_SIZE) {
                     //printf("%d\n",i);
-                    printSend(&pkts[abs(i%10)], 1);
-                    sendto(sockfd, &pkts[abs(i%10)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
+                    printSend(&pkts[abs(i%WND_SIZE)], 1);
+                    sendto(sockfd, &pkts[abs(i%WND_SIZE)], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                     i++;
                 }
                 timer = setTimer();

@@ -221,7 +221,7 @@ int main (int argc, char *argv[])
                     sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                     break;
                 }
-                else if (recvpkt.seqnum == cliSeqNum && recvpkt.seqnum-cliSeqNum < WND_SIZE*PAYLOAD_SIZE) {
+                else if (recvpkt.seqnum == cliSeqNum) {
                     fwrite(recvpkt.payload, 1, recvpkt.length, fp);
                     cliSeqNum = (cliSeqNum + recvpkt.length)% MAX_SEQN;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
@@ -231,9 +231,11 @@ int main (int argc, char *argv[])
                 else if (recvpkt.seqnum != cliSeqNum) {
                     buildPkt(&ackpkt, seqNum, (cliSeqNum)% MAX_SEQN, 0, 0, 0, 1, 0, NULL);
                     printSend(&ackpkt, 0);
+                    sendto(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr*) &cliaddr, cliaddrlen);
                 }
             }  
         }
+
             
 
         // *** End of your server implementation ***
