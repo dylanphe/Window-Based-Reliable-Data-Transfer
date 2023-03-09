@@ -267,7 +267,7 @@ int main (int argc, char *argv[])
                     for(int i = s; i < s+WND_SIZE; i++) {
                         int rcvdExpectSeq = i%WND_SIZE;
                         if(ackpkt.acknum == (pkts[rcvdExpectSeq].seqnum + pkts[rcvdExpectSeq].length) % MAX_SEQN) {
-                            s = (rcvdExpectSeq) % WND_SIZE;
+                            s = (rcvdExpectSeq+1) % WND_SIZE;
                             break;
                         }
                     }  
