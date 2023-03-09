@@ -306,7 +306,6 @@ int main (int argc, char *argv[])
             // In case of full WND
             if (e == s) {
                 //printSend(&pkts[s], 1);
-                sendto(sockfd, &pkts[s], PKT_SIZE, 0, (struct sockaddr*) &servaddr, servaddrlen);
                 int i = s;
                 //printf("%d, %d, %d\n", e, s, i);
                 while (i < e+WND_SIZE) {
