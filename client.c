@@ -260,6 +260,7 @@ int main (int argc, char *argv[])
                 // If received IN ORDER ACK, and not a duplicate, reset timer as s moves up one step.
         n = recvfrom(sockfd, &ackpkt, PKT_SIZE, 0, (struct sockaddr *) &servaddr, (socklen_t *) &servaddrlen);
         if (n > 0) {
+            printRecv(&ackpkt);
             //printf("%d, %d\n", ackpkt.acknum, (pkts[s].seqnum + pkts[s].length)%MAX_SEQN);
             // timer is restart
             if (ackpkt.acknum == (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack) {
@@ -268,13 +269,13 @@ int main (int argc, char *argv[])
                 //printf("old ack is now %d\n", oldacked);
                 s += 1;
                 s %= 10;
-                printRecv(&ackpkt);
+                //printRecv(&ackpkt);
                 timer = setTimer();
                 //printf("set timer for packet %d\n", pkts[s].seqnum);
             } 
 
-            else if ((ackpkt.acknum > (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && !ackpkt.dupack)){
-                printRecv(&ackpkt);
+            else if (!ackpkt.dupack && ackpkt.acknum > (pkts[s].seqnum + pkts[s].length)%MAX_SEQN && ackpkt.acknum < f_size){
+                //printRecv(&ackpkt);
                 //printf("need to readjust window, current: %d. next: %d\n",(pkts[s].seqnum + pkts[s].length)%MAX_SEQN, ackpkt.acknum);
                 while((pkts[s].seqnum + pkts[s].length)%MAX_SEQN != ackpkt.acknum){
                     //printf("adjust window, oldacked was: %d ", oldacked);
@@ -299,7 +300,7 @@ int main (int argc, char *argv[])
                         e += 1;
                         e %= 10;
                         //printf("bytesent is now: %d, e is: %d\n", bytesent, e);
-                    } else {
+                    } else if(oldacked >= f_size && abs(e-s) == 0){
                         break;
                         //printf("bye\n");
                     }
@@ -308,10 +309,15 @@ int main (int argc, char *argv[])
                 s += 1;
                 s %= 10;
                 timer = setTimer();
+                if(oldacked >= f_size && abs(e-s) == 0){
+                    break;
+                    //printf("bye\n");
+                }
             }
-            else if (ackpkt.dupack) {
-                printRecv(&ackpkt);
-            }
+
+            // else if (ackpkt.dupack) {
+            //     printRecv(&ackpkt);
+            // }
             
             // Loop breaker: when file size reached for 
             if (oldacked >= f_size && abs(e-s) == 0) {
