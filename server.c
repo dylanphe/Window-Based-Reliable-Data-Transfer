@@ -211,9 +211,10 @@ int main (int argc, char *argv[])
                 else 
                     modl = 1;*/
                 // Loop breaker: when fin is received
+                printRecv(&recvpkt);
                 if (recvpkt.fin) {
                     //printf("%d\n", cliSeqNum);
-                    printRecv(&recvpkt);
+                    //printRecv(&recvpkt);
                     cliSeqNum = (cliSeqNum + 1)% MAX_SEQN;
                     buildPkt(&ackpkt, seqNum, cliSeqNum, 0, 0, 1, 0, 0, NULL);
                     printSend(&ackpkt, 0);
