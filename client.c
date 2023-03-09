@@ -293,7 +293,7 @@ int main (int argc, char *argv[])
             }
 
             // Loop breaker: when file size reached for 
-            printf("%d\n", oldacked);
+            //printf("%d\n", oldacked);
             if (oldacked >= f_size) {
                 //printf("%ld, %d", f_size, oldacked);
                 sendertimerOn = 0;
